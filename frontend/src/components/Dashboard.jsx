@@ -19,6 +19,21 @@ const Dashboard = () => {
     const [pdf, setPdf] = useState(null);
     const [loading, setLoading] = useState(false);
     const [result, setResult] = useState(null);
+    const [serverStatus, setServerStatus] = useState('Checking...');
+
+    const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
+
+    React.useEffect(() => {
+        const checkHealth = async () => {
+            try {
+                await axios.get(`${API_URL}/api/health`);
+                setServerStatus('Online');
+            } catch (err) {
+                setServerStatus('Offline (Connecting...)');
+            }
+        };
+        checkHealth();
+    }, [API_URL]);
 
     const handleInputChange = (e) => {
         setInputs({...inputs, [e.target.name]: e.target.value});
@@ -37,20 +52,15 @@ const Dashboard = () => {
         if (pdf) formData.append('pdf', pdf);
         formData.append('symptoms', symptomsString);
         
-        // Let ML pipeline decide if optional rules apply or fail if it requires them.
-        // The prompt says "X-RAY IMAGE UPLOAD (Optional)" but predict.py might crash if missing image initially.
-        // We pass empty if null, predictor should ideally handle.
-
         setLoading(true);
         try {
-            const API_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000';
             const res = await axios.post(`${API_URL}/api/predict`, formData, {
                 headers: { 'Content-Type': 'multipart/form-data' }
             });
             setResult(res.data);
         } catch (err) {
             console.error(err);
-            alert('Analysis failed. Ensure image/pdf are provided if ML requires it.');
+            alert('Analysis failed. Ensure the diagnostic engine is online and inputs are valid.');
         } finally {
             setLoading(false);
         }
@@ -59,7 +69,7 @@ const Dashboard = () => {
     return (
         <div style={{ padding: '2rem 1rem' }}>
             {/* Top Bar */}
-            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', marginBottom: '2rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', position: 'relative', marginBottom: '1rem' }}>
                 <button 
                     onClick={() => navigate('/')}
                     style={{ position: 'absolute', left: 0, background: 'none', border: 'none', color: 'var(--primary-color)', cursor: 'pointer', fontWeight: 'bold' }}
@@ -68,9 +78,12 @@ const Dashboard = () => {
                 </button>
                 <div style={{ textAlign: 'center' }}>
                     <h1 style={{ margin: 0, letterSpacing: '1px' }}>TB PREDICTION INTERFACE</h1>
-                    <p className="text-success" style={{ fontSize: '0.8rem', letterSpacing: '1px', fontWeight: 'bold', textTransform: 'uppercase' }}>
-                        Multi-Modal Analytics Dashboard
-                    </p>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.5rem', marginTop: '0.3rem' }}>
+                        <div style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: serverStatus === 'Online' ? '#00ff88' : '#ff3333' }}></div>
+                        <span style={{ fontSize: '0.7rem', color: '#888', textTransform: 'uppercase', letterSpacing: '1px' }}>
+                            Engine Status: {serverStatus}
+                        </span>
+                    </div>
                 </div>
             </div>
 

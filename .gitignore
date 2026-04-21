@@ -10,3 +10,7 @@ __pycache__/
 
 ml-pipeline/tb_xray_temp/
 ml-pipeline/data/
+
+# Local Uploads
+backend/uploads/*
+!backend/uploads/.gitkeep
