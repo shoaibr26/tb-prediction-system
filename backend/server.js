@@ -2,6 +2,13 @@ const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
+const fs = require('fs');
+
+// Ensure uploads directory exists for image/pdf processing
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+    fs.mkdirSync(uploadsDir);
+}
 
 const predictRoutes = require('./routes/predict');
 
