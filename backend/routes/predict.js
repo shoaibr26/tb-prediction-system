@@ -22,12 +22,8 @@ router.post('/', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', m
         const pdfFile = req.files['pdf'] ? req.files['pdf'][0] : null;
         const symptoms = req.body.symptoms || '';
 
-        if (!imageFile || !pdfFile) {
-            return res.status(400).json({ error: 'Both Image and PDF are required.' });
-        }
-
-        const imagePath = path.resolve(imageFile.path);
-        const pdfPath = path.resolve(pdfFile.path);
+        const imagePath = imageFile ? path.resolve(imageFile.path) : "None";
+        const pdfPath = pdfFile ? path.resolve(pdfFile.path) : "None";
         const pythonScriptPath = path.resolve(__dirname, '../../ml-pipeline/predict.py');
         const venvPythonPath = path.resolve(__dirname, '../../ml-pipeline/venv/Scripts/python.exe');
 

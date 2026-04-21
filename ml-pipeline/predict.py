@@ -24,6 +24,10 @@ def extract_cbc_from_pdf(pdf_path):
     extracted = {k: None for k in markers}
     features = []
     
+    # Handle missing or dummy PDF path
+    if not pdf_path or pdf_path.lower() == "none" or not os.path.exists(pdf_path):
+        return {"info": "No PDF provided"}, [0.0]*len(markers)
+
     try:
         with pdfplumber.open(pdf_path) as pdf:
             text = " ".join([page.extract_text() or "" for page in pdf.pages])
@@ -35,7 +39,7 @@ def extract_cbc_from_pdf(pdf_path):
                         extracted[key] = float(match.group(1))
                     except ValueError:
                         extracted[key] = None
-                features.append(extracted[key] if extracted[key] is not None else 0.0) # default to 0 if not found for Model
+                features.append(extracted[key] if extracted[key] is not None else 0.0)
     except Exception as e:
         features = [0.0]*len(markers)
         extracted = {'error': str(e)}
@@ -43,7 +47,6 @@ def extract_cbc_from_pdf(pdf_path):
     return extracted, features
 
 def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None):
-    # Setup for Grad-CAM
     try:
         grad_model = tf.keras.models.Model(
             model.inputs, [model.get_layer(last_conv_layer_name).output, model.output]
@@ -64,7 +67,6 @@ def make_gradcam_heatmap(img_array, model, last_conv_layer_name, pred_index=None
         heatmap = tf.maximum(heatmap, 0) / tf.math.reduce_max(heatmap)
         return heatmap.numpy()
     except Exception:
-        # Fallback if layer not found
         return np.zeros((7, 7))
 
 def save_gradcam(img_path, heatmap, out_path, alpha=0.4):
@@ -85,15 +87,12 @@ def evaluate_kbs(cbc_data, symptoms):
     recommendations = []
     override = False
 
-    # 1. CBC Rules Baseline Analysis
     if cbc_data.get('Hemoglobin') is not None:
         hb = cbc_data['Hemoglobin']
         if hb < 11.0:
             kb_score += 0.15
             rules_triggered.append(f"Hemoglobin is LOW ({hb}) -> Indicates anemia, common in chronic infections like TB.")
             recommendations.append("Consider iron supplementation and further anemia workup.")
-        elif hb > 17.5:
-            rules_triggered.append(f"Hemoglobin is HIGH ({hb}) -> Polycythemia check.")
 
     if cbc_data.get('WBC') is not None:
         wbc = cbc_data['WBC']
@@ -101,8 +100,6 @@ def evaluate_kbs(cbc_data, symptoms):
             kb_score += 0.2
             rules_triggered.append(f"WBC count is HIGH ({wbc}) -> Strong indicator of active infection.")
             recommendations.append("Antibiotic/Anti-tubercular therapy evaluation required due to active infection.")
-        elif wbc < 4.0:
-            rules_triggered.append(f"WBC count is LOW ({wbc}) -> Possible myelosuppression or viral coinfection.")
 
     if cbc_data.get('ESR') is not None:
         esr = cbc_data['ESR']
@@ -110,9 +107,6 @@ def evaluate_kbs(cbc_data, symptoms):
             kb_score += 0.15
             rules_triggered.append(f"ESR is ELEVATED ({esr}) -> Indicates active systemic inflammation.")
     
-    # Complex rules integration spanning 100+ clinical thresholds conceptually
-    # (Here we encode the most impactful ones out of the requested clinical rules structure)
-    # Using a symptom weighting matrix for extensive rules
     symptom_weights = {
         'chronic_cough': 0.15, 'weight_loss': 0.15, 'night_sweats': 0.15,
         'fever': 0.1, 'chest_pain': 0.1, 'fatigue': 0.05
@@ -127,25 +121,22 @@ def evaluate_kbs(cbc_data, symptoms):
         if 'hemoptysis' in s_lower or 'blood in sputum' in s_lower:
             override = True
             rules_triggered.append(f"CRITICAL OVERRIDE: Hemoptysis (Coughing blood) detected -> AUTOMATIC HIGH RISK.")
-            recommendations.append("EMERGENCY RESPONSE: Isolate patient and schedule immediate pulmonology consult. Sputum AFB smear mandatory.")
+            recommendations.append("EMERGENCY RESPONSE: Isolate patient and schedule immediate pulmonology consult.")
 
-    # Bound KB score
     kb_score = min(max(kb_score, 0.0), 1.0)
     
-    # Default recommendations if none
     if not recommendations:
         recommendations.append("Monitor patient and repeat tests if symptoms worsen.")
 
-    # WHO Guidelines
-    who_guidelines = "According to WHO, patients with chronic cough (>2 weeks) accompanied by weight loss or night sweats should be prioritized for TB screening. Xpert MTB/RIF is the recommended initial diagnostic test."
+    who_guidelines = "According to WHO, patients with chronic cough (>2 weeks) accompanied by weight loss or night sweats should be prioritized for TB screening."
 
     explanation = "Based on clinical findings, "
     if override:
         explanation += "critical symptoms mandate immediate intervention. "
     elif kb_score > 0.5:
-        explanation += "the aggregation of CBC anomalies and symptoms strongly suggests active infection. "
+        explanation += "the aggregation of clinical markers and symptoms suggests active infection. "
     else:
-        explanation += "clinical markers are mostly stable, suggesting lower risk. "
+        explanation += "clinical markers are mostly stable. "
 
     return {
         'kbs_score': kb_score,
@@ -164,11 +155,14 @@ def main():
     image_path = sys.argv[1]
     pdf_path = sys.argv[2]
     symptoms = sys.argv[3].split(',') if len(sys.argv) > 3 else []
-    output_dir = os.path.dirname(image_path)
+    output_dir = os.path.dirname(image_path) if os.path.exists(image_path) else os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend', 'uploads')
+    
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
     base_dir = os.path.dirname(os.path.abspath(__file__))
 
     try:
-        # Load models
         vision_model_path = os.path.join(base_dir, 'vision_model.h5')
         tabular_model_data_path = os.path.join(base_dir, 'tabular_model.pkl')
         
@@ -176,38 +170,29 @@ def main():
         tabular_data = joblib.load(tabular_model_data_path) if os.path.exists(tabular_model_data_path) else None
         tabular_model = tabular_data['model'] if tabular_data else None
 
-        # Process PDF
         cbc_extracted, features = extract_cbc_from_pdf(pdf_path)
 
         # Tabular Prediction
-        tabular_score = 0.0
-        if tabular_model:
-            # Simple fallback if feature counts disagree (e.g. mock vs real setup)
+        tabular_score = None
+        if tabular_model and pdf_path.lower() != "none" and os.path.exists(pdf_path):
             expected_features_len = len(tabular_data.get('features', []))
-            if expected_features_len > 0:
-                 # Pad or trim features
-                 feat_arr = np.array(features)
-                 if len(feat_arr) < expected_features_len:
-                     feat_arr = np.pad(feat_arr, (0, expected_features_len - len(feat_arr)))
-                 else:
-                     feat_arr = feat_arr[:expected_features_len]
-                 tabular_score = tabular_model.predict_proba([feat_arr])[0][1]
-        else:
-             # mock score based loosely on extracted
-             tabular_score = 0.6 if sum(features) > 20 else 0.2
+            feat_arr = np.array(features)
+            if len(feat_arr) < expected_features_len:
+                feat_arr = np.pad(feat_arr, (0, expected_features_len - len(feat_arr)))
+            else:
+                feat_arr = feat_arr[:expected_features_len]
+            tabular_score = float(tabular_model.predict_proba([feat_arr])[0][1])
 
         # Vision Prediction & Grad-CAM
-        vision_score = 0.0
-        gradcam_path = os.path.join(output_dir, f"heatmap_{os.path.basename(image_path)}")
-        if vision_model and os.path.exists(image_path):
+        vision_score = None
+        gradcam_url = None
+        if vision_model and image_path.lower() != "none" and os.path.exists(image_path):
             img = tf.keras.preprocessing.image.load_img(image_path, target_size=(224, 224))
             img_array = tf.keras.preprocessing.image.img_to_array(img)
             img_array = np.expand_dims(img_array, axis=0) / 255.0
             
             vision_score = float(vision_model.predict(img_array)[0][0])
             
-            # Create Grad-CAM
-            # Using standard mobilenetv2 layer names roughly
             last_conv_layer = 'out_relu'
             for layer in reversed(vision_model.layers):
                 if isinstance(layer, tf.keras.layers.Conv2D):
@@ -215,27 +200,31 @@ def main():
                     break
             
             heatmap = make_gradcam_heatmap(img_array, vision_model, last_conv_layer)
+            gradcam_path = os.path.join(output_dir, f"heatmap_{os.path.basename(image_path)}")
             save_gradcam(image_path, heatmap, gradcam_path)
+            gradcam_url = f"/uploads/{os.path.basename(gradcam_path)}"
 
-        # Base ML Score
-        ml_score = (vision_score + tabular_score) / 2.0
+        # Fusion logic
+        scores = []
+        if vision_score is not None: scores.append(vision_score)
+        if tabular_score is not None: scores.append(tabular_score)
+        
+        ml_score = sum(scores) / len(scores) if scores else 0.0
 
-        # KBS Evaluation
         kbs_result = evaluate_kbs(cbc_extracted, symptoms)
 
-        # FUSION
         final_score = 0.6 * ml_score + 0.4 * kbs_result['kbs_score']
         if kbs_result['override']:
             final_score = 0.95
 
         result = {
             "ml_score": ml_score,
-            "vision_score": vision_score,
-            "tabular_score": tabular_score,
+            "vision_score": vision_score if vision_score is not None else 0.0,
+            "tabular_score": tabular_score if tabular_score is not None else 0.0,
             "kbs_result": kbs_result,
             "final_score": final_score,
             "cbc_extracted": cbc_extracted,
-            "gradcam_heatmap": f"/uploads/{os.path.basename(gradcam_path)}"
+            "gradcam_heatmap": gradcam_url
         }
 
         print(json.dumps(result))

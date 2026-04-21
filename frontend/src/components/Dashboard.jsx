@@ -152,7 +152,7 @@ const Dashboard = () => {
                         <div className="output-panel">
                             <h4 className="panel-title">GRAD-CAM TARGET ISOLATION</h4>
                             <div className="img-container">
-                                {result.gradcam_heatmap ? <img src={`http://localhost:5000${result.gradcam_heatmap}`} alt="Heatmap" /> : <div className="placeholder">No Heatmap</div>}
+                                {result.gradcam_heatmap ? <img src={`${import.meta.env.VITE_BACKEND_URL || 'http://localhost:5000'}${result.gradcam_heatmap}`} alt="Heatmap" /> : <div className="placeholder">No Heatmap</div>}
                             </div>
                         </div>
 
