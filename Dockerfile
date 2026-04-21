@@ -39,6 +39,7 @@ COPY ml-pipeline /app/ml-pipeline
 RUN sed -i "s|const venvPythonPath.*|const venvPythonPath = 'python3';|g" /app/backend/routes/predict.js
 
 # Expose Hugging Face's required port
+ENV PORT=7860
 EXPOSE 7860
 
 # Run the backend
