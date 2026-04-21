@@ -25,7 +25,12 @@ router.post('/', upload.fields([{ name: 'image', maxCount: 1 }, { name: 'pdf', m
         const imagePath = imageFile ? path.resolve(imageFile.path) : "None";
         const pdfPath = pdfFile ? path.resolve(pdfFile.path) : "None";
         const pythonScriptPath = path.resolve(__dirname, '../../ml-pipeline/predict.py');
-        const venvPythonPath = path.resolve(__dirname, '../../ml-pipeline/venv/Scripts/python.exe');
+        
+        // Auto-detect Python path based on OS (Windows local vs Linux HuggingFace)
+        const isWindows = process.platform === "win32";
+        const venvPythonPath = isWindows 
+            ? path.resolve(__dirname, '../../ml-pipeline/venv/Scripts/python.exe')
+            : "python3";
 
         const pythonProcess = spawn(venvPythonPath, [pythonScriptPath, imagePath, pdfPath, symptoms]);
 
