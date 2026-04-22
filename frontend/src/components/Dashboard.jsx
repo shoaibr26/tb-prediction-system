@@ -170,16 +170,24 @@ const Dashboard = () => {
                         </div>
 
                         <div className="output-panel flex-col-center">
-                            <h4 className="panel-title" style={{ alignSelf: 'flex-start', width: '100%' }}>DIAGNOSTIC PROBABILITY</h4>
+                            {/* Title with dynamic color */}
+                            <h4 className="panel-title" style={{ alignSelf: 'flex-start', width: '100%', color: result.final_score > 0.7 ? '#ff3333' : result.final_score > 0.4 ? '#ff9900' : '#00ff88' }}>
+                                DIAGNOSTIC PROBABILITY
+                            </h4>
+                            
                             <div 
                                 className="radial-progress" 
                                 style={{ 
                                     background: `conic-gradient(${
                                         result.final_score > 0.7 ? '#ff3333' : result.final_score > 0.4 ? '#ff9900' : '#00ff88'
-                                    } ${(result.final_score * 100).toFixed(1)}%, #111 ${(result.final_score * 100).toFixed(1)}%)` 
+                                    } ${(result.final_score * 100).toFixed(1)}%, #111 ${(result.final_score * 100).toFixed(1)}%)`,
+                                    boxShadow: `0 0 20px ${result.final_score > 0.7 ? 'rgba(255, 51, 51, 0.2)' : result.final_score > 0.4 ? 'rgba(255, 153, 0, 0.2)' : 'rgba(88, 255, 120, 0.1)'}`
                                 }}
                             >
-                                <div className="radial-inner">
+                                <div 
+                                    className="radial-inner" 
+                                    style={{ color: result.final_score > 0.7 ? '#ff3333' : result.final_score > 0.4 ? '#ff9900' : '#00ff88' }}
+                                >
                                     {(result.final_score * 100).toFixed(1)}%
                                 </div>
                             </div>
