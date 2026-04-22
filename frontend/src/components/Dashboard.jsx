@@ -171,7 +171,14 @@ const Dashboard = () => {
 
                         <div className="output-panel flex-col-center">
                             <h4 className="panel-title" style={{ alignSelf: 'flex-start', width: '100%' }}>DIAGNOSTIC PROBABILITY</h4>
-                            <div className="radial-progress" style={{ background: `conic-gradient(var(--primary-color) ${(result.final_score * 100).toFixed(1)}%, #111 ${(result.final_score * 100).toFixed(1)}%)` }}>
+                            <div 
+                                className="radial-progress" 
+                                style={{ 
+                                    background: `conic-gradient(${
+                                        result.final_score > 0.7 ? '#ff3333' : result.final_score > 0.4 ? '#ff9900' : '#00ff88'
+                                    } ${(result.final_score * 100).toFixed(1)}%, #111 ${(result.final_score * 100).toFixed(1)}%)` 
+                                }}
+                            >
                                 <div className="radial-inner">
                                     {(result.final_score * 100).toFixed(1)}%
                                 </div>
